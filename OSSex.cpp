@@ -75,7 +75,9 @@ void OSSex::setID(int deviceId) {
         device.ledPins[0] = 13;
         
         // Inputs 2 and 3 remain unconnected in most models. use enableExtraInputs() to enable.
-        device.inCount = 2;
+        device.inCount = 4;
+        device.inPins[0] = A0; // D-
+        device.inPins[1] = A1; // D+
         device.inPins[2] = A2;
         device.inPins[3] = A3;
         
