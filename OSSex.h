@@ -15,7 +15,7 @@
 
 // Timer4 is for ATmega32U4/Lilypad usb and should interrupt every ~1ms. Timer2 is for ATmega328P/Arduino Uno and should interrupt ~1ms.
 #define TIMER4_INIT 16;
-#define TIMER2_INIT 131;
+#define TIMER1_INIT 34286;
 
 // model names
 #define ALPHA 0
@@ -94,7 +94,7 @@ class OSSex {
 
     int step[4];
 
-  private:
+//  private:
     struct pattern {
       int power[3];
       unsigned int duration;

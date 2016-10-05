@@ -23,6 +23,10 @@ OSSex Toy = OSSex();
 ISR(TIMER4_OVF_vect) {
 	Toy.update();
 };
+#else
+ISR(TIMER1_COMPA_vect){
+    Toy.update();
+};
 #endif
 
 // the real constructor. give it a device ID and it will set up your toy's pins and timers.
@@ -41,8 +45,10 @@ void OSSex::setID(int deviceId) {
 
 		// Inputs 2 and 3 remain unconnected in most models. use enableExtraInputs() to enable.
 		device.inCount = 2;
+#if defined(A9) // Lilypad USB / Mod
 		device.inPins[0] = A7; // D-
 		device.inPins[1] = A9; // D+
+#endif
 		device.inPins[2] = A2;
 		device.inPins[3] = A3;
 
@@ -58,7 +64,25 @@ void OSSex::setID(int deviceId) {
 		// A0 is connected to battery voltage
 		pinMode(A0, INPUT);
 
-	} else {
+    } else if(deviceId == 2) {
+        device.outCount = 2;
+        device.outPins[0] = 5;
+        device.outPins[1] = 6;
+        
+        device.deviceId = 2;
+        
+        device.ledCount = 1;
+        device.ledPins[0] = 13;
+        
+        // Inputs 2 and 3 remain unconnected in most models. use enableExtraInputs() to enable.
+        device.inCount = 2;
+        device.inPins[2] = A2;
+        device.inPins[3] = A3;
+        
+        device.buttons[0].pin = 4;
+
+        
+    } else {
 		// Lilypad USB  / Alpha model
 		device.outCount = 3;
 		device.outPins[0] = 3;
@@ -95,21 +119,37 @@ void OSSex::setID(int deviceId) {
 	for (int i = 0; i < device.ledCount; i++) {
 		pinMode(device.ledPins[i], OUTPUT);
 	}
+    noInterrupts();           // disable all interrupts
 
 	// Start the interrupt timer (timer2/timer4)
 	// Thanks for Noah at arduinomega.blogspot.com for clarifying this
 	#if defined(__AVR_ATmega32U4__)
-		_timer_start_mask = &TCCR4B;
-		_timer_count = &TCNT4;
+      _timer_start_mask = &TCCR4B;
+      _timer_count = &TCNT4;
 	  _timer_interrupt_flag = &TIFR4;
 	  _timer_interrupt_mask_b = &TIMSK4;
 	  _timer_init = TIMER4_INIT;
-	#endif
+    
+    *_timer_start_mask = 0x05;				// Timer PWM disable, prescale / 16: 00000101
+        *_timer_count = _timer_init;			// Reset Timer Count
+        *_timer_interrupt_flag = 0x00;			// Timer INT Flag Reg: Clear Timer Overflow Flag
+        *_timer_interrupt_mask_b = 0x04;    // Timer INT Reg: Timer Overflow Interrupt Enable: 00000100
+    #else
+    TCCR1A = 0; // set entire TCCR1A register to 0
+    TCCR1B = 0; // same for TCCR1B
+    TCNT1  = 0; // initialize counter value to 0
+    // set compare match register for 1000 Hz increments
+    OCR1A = 15999; // = 16000000 / (1 * 1000) - 1 (must be <65536)
+    // turn on CTC mode
+    TCCR1B |= (1 << WGM12);
+    // Set CS12, CS11 and CS10 bits for 1 prescaler
+    TCCR1B |= (0 << CS12) | (0 << CS11) | (1 << CS10);
+    // enable timer compare interrupt
+    TIMSK1 |= (1 << OCIE1A);
+    #endif
 
-	*_timer_start_mask = 0x05;				// Timer PWM disable, prescale / 16: 00000101
-	*_timer_count = _timer_init;			// Reset Timer Count
-	*_timer_interrupt_flag = 0x00;			// Timer INT Flag Reg: Clear Timer Overflow Flag
-	*_timer_interrupt_mask_b = 0x04;    // Timer INT Reg: Timer Overflow Interrupt Enable: 00000100
+    interrupts();             // enable all interrupts
+
   _tickCount = 0;
 
   // Initial power and time scale is 1.0 (normal / 100% power and time).
@@ -167,12 +207,15 @@ void OSSex::update() {
 		}
 	}
 
-	// Hack alert -- start mask only needs to be initialized once, but wiring.c of the Arduino core
+    // Hack alert -- start mask only needs to be initialized once, but wiring.c of the Arduino core
 	// changes the mask back to 0x07 before setup() runs
 	// So if running Toy.setID() from setup(), no problem. If preinsantiating as a Mod, problem.
+#if defined(__AVR_ATmega32U4__)
 	*_timer_start_mask = 0x05;
 	*_timer_count = _timer_init;		//Reset timer after interrupt triggered
 	*_timer_interrupt_flag = 0x00;		//Clear timer overflow flag
+#endif
+    
 }
 
 
@@ -512,9 +555,11 @@ int OSSex::setHackerPort(unsigned int flag) {
 		case HACKER_PORT_AIN:
 			pin0 = LOW;
 			pin1 = LOW;
+#if defined(A9) // Lilypad USB / Mod
 			device.HP0 = A7;
 			device.HP1 = A9;
-			break;
+#endif
+            break;
 		// Hacker Port I2C host
 		case HACKER_PORT_I2C:
 			pin0 = HIGH;
